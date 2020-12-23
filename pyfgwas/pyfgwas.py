@@ -22,12 +22,7 @@ import time
 
 from multiprocessing import Pool
 
-hostname = socket.gethostname()
-if hostname == 'gatsby.ucsd.edu':
-    sys.path.append('/home/data/kglab-python3-modules')
-    import fgwasplot
-elif hostname == 'holden':
-    sys.path.append('/lab/kglab-python3-modules')
+from pyfgwas.fgwasplot import plot_params
 
 
 
@@ -115,7 +110,7 @@ class IndividualAnnotationResults():
         """Collect individual annotation results
         """
         
-        with Pool(processes=min(args.processes, len(self.annotations))) as pool:
+        with Pool(processes=min(self.args.processes, len(self.annotations))) as pool:
             self.data = (
                 (
                     (
@@ -132,7 +127,7 @@ class IndividualAnnotationResults():
                         pool.starmap(
                             collect_individual_annotation_result,
                             (
-                                (args, annotation, self.header, base_model)
+                                (self.args, annotation, self.header, base_model)
                                 for annotation in (
                                     self.annotations
                                     - set(self.args.base_model.split('+'))
@@ -173,7 +168,7 @@ class IndividualAnnotationResults():
                     float(ci_hi)
                     if (
                         ((float(ci_lo) > 0) or (float(ci_hi) < 0))
-                        if args.strict_joint_model
+                        if self.args.strict_joint_model
                         else True
                     ):
                         self.defined_ci_annotations.add(parameter)
@@ -198,14 +193,11 @@ class IndividualAnnotationResults():
                 self.data[1:]
             ):
                 if (
-                    float(llk) == best_individual_llk
-                    and (
+                    float(llk) == best_individual_llk and (
                         (
                             parameter.replace('_ln', '')
                             in self.defined_ci_annotations
-                        )
-                        if self.defined_ci_annotations
-                        else True
+                        ) if self.defined_ci_annotations else True
                     )
                 ):
                     best_individual_annotations.append(
@@ -214,7 +206,7 @@ class IndividualAnnotationResults():
             if len(best_individual_annotations) == 1:
                 best_individual_annotation = best_individual_annotations[0]
                 estimates = collect_estimates(
-                    '{}-individual-annotation-results.txt'.format(args.output),
+                    '{}-indiv.tsv'.format(self.args.output),
                     self.args.base_model.split('+')
                     + [best_individual_annotation[0]]
                 )
@@ -443,9 +435,9 @@ class FgwasModel():
             ) as f:
                 f.write(self.output_files[extension])
         if self.args.generate_plots:
-            fgwasplot.plot_params(
-                '{}-{}.params'.format(self.args.output, tag, extension),
-                '{}-{}.pdf'.format(self.args.output, tag, extension),
+            plot_params(
+                '{}-{}.params'.format(self.args.output, tag),
+                '{}-{}.pdf'.format(self.args.output, tag),
                 title=self.args.plot_title.format(tag)
             )
     
@@ -686,16 +678,16 @@ class FgwasModel():
                             'step and proceeding to cross-validation phase'
                         )
 
-    def calibrate_cross_validation_penalty(self, header):
+    def calibrate_cross_validation_penalty(self, header, processes=1):
         """Calibrate the cross validation penalty
         """
         
         xv_penalties = tuple(
-            0.5 * x / max(args.processes, 10)
-            for x in range(1, max(args.processes, 10) + 1)
+            0.5 * x / max(processes, 10)
+            for x in range(1, max(processes, 10) + 1)
         )
         with tempfile.TemporaryDirectory() as temp_dir_name:
-            with Pool(processes=args.processes) as pool:
+            with Pool(processes=processes) as pool:
                 pool.map(
                     call_fgwas,
                     tuple(
@@ -1040,7 +1032,8 @@ def best_annotation_combinations_xvl(annotation_combinations, dir_name):
     return best_combo_xvl, best_combos
 
 
-def main(args):
+def main():
+    args = parse_arguments()
     assert os.path.isfile(PATH), (
         'fgwas not found, please set environment variable PYFGWAS_PATH'
     )
@@ -1052,7 +1045,7 @@ def main(args):
     print('Collecting individual annotation results')
     individual_results.collect(model)
     print('Exporting individual annotation results')
-    individual_results.export()
+    individual_results.export(f'{args.output}-indiv.tsv')
     print('Identifying annotations with well-defined confidence intervals')
     individual_results.identify_defined_ci_annotations()
     print(
@@ -1080,7 +1073,7 @@ def main(args):
             break
     print('Exporting pre-cross-validation results')
     model.export('pre-xv')
-    model.calibrate_cross_validation_penalty(header)
+    model.calibrate_cross_validation_penalty(header, processes=args.processes)
     print('Beginning cross-validation phase')
     number_of_annotations = len(model.annotations)
     for iteration in range(number_of_annotations - 1):
@@ -1099,27 +1092,18 @@ def parse_arguments():
             'Apply the workflow suggested by the fgwas manual'
         )
     )
-    required_group = parser.add_argument_group('required arguments')
-    required_group.add_argument(
+    parser.add_argument(
         'input',
         metavar='<path/to/fgwas/input_file.txt.gz>',
         help='Path to fgwas input file'
     )
-    required_group.add_argument(
+    parser.add_argument(
         'output',
         metavar='<prefix/for/output_files>',
         help='Prefix for output files'
     )
-    optional_group = parser.add_argument_group('optional arguments')
-    optional_group.add_argument(
-        '-t',
-        '--threshold',
-        metavar='<float>',
-        type=float,
-        default=0,
-        help='Likelihood threshold for model improvement'
-    )
-    optional_group.add_argument(
+    resource_group = parser.add_argument_group('resource arguments')
+    resource_group.add_argument(
         '-p',
         '--processes',
         metavar='<int>',
@@ -1127,25 +1111,35 @@ def parse_arguments():
         type=int,
         help='Maximum number of fgwas processes to launch'
     )
-    optional_group.add_argument(
+    parameter_group = parser.add_argument_group('parameter arguments')
+    parameter_group.add_argument(
         '-b',
         '--bed',
         metavar='<path/to/bed_file.bed>',
         help='Path to .bed file containing region definitions'
     )
-    optional_group.add_argument(
+    parameter_group.add_argument(
         '-k',
         '--window',
         metavar='<int>',
         help='Window size'
     )
-    optional_group.add_argument(
+    workflow_group = parser.add_argument_group('workflow arguments')
+    workflow_group.add_argument(
+        '-t',
+        '--threshold',
+        metavar='<float>',
+        type=float,
+        default=0,
+        help='Likelihood threshold for model improvement'
+    )
+    workflow_group.add_argument(
         '--base-model',
         default='',
         metavar='<list+of+annotations>',
         help='"+"-separated list of annotations to use as a base model.'
     )
-    optional_group.add_argument(
+    workflow_group.add_argument(
         '--resume',
         default='',
         metavar='<list+of+annotations>',
