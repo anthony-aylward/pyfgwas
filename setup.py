@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='pyfgwas',
-    version='0.0.3',
+    version='0.0.4',
     author='Anthony Aylward',
     author_email='aaylward@eng.ucsd.edu',
     description='Wrapper for fGWAS',
@@ -18,7 +18,11 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent"
     ],
-    install_requires=[],
+    install_requires=[
+        'matplotlib',
+        'pandas',
+        'seaborn'
+    ],
     entry_points={
         'console_scripts': ['pyfgwas=pyfgwas.pyfgwas:main',]
     },
