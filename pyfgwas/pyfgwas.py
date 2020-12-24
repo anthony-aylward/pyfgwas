@@ -1046,44 +1046,45 @@ def main():
     individual_results.collect(model)
     print('Exporting individual annotation results')
     individual_results.export(f'{args.output}-indiv.tsv')
-    print('Identifying annotations with well-defined confidence intervals')
-    individual_results.identify_defined_ci_annotations()
-    print(
-        '{} annotations with well-defined confidence intervals.'
-        .format(len(individual_results.defined_ci_annotations))
-    )
-    if not args.resume:
-        individual_results.identify_best_starting_state()
-        model.set_state(individual_results.best_starting_state)
-    print(
-        'Constructing joint model, beginning with: {} (llk: {})'
-        .format(', '.join(model.annotations), model.llk)
-    )
-    while (
-        (
-            individual_results
-            .defined_ci_annotations
-            .union(set(args.base_model.split('+')))
+    if not args.individual_results_only:
+        print('Identifying annotations with well-defined confidence intervals')
+        individual_results.identify_defined_ci_annotations()
+        print(
+            '{} annotations with well-defined confidence intervals.'
+            .format(len(individual_results.defined_ci_annotations))
         )
-        > set(model.annotations)
-    ):
-        model.append_best_annotation(individual_results)
-        if model.llk <= model.llk_cache + args.threshold:
-            model.revert()
-            break
-    print('Exporting pre-cross-validation results')
-    model.export('pre-xv')
-    model.calibrate_cross_validation_penalty(header, processes=args.processes)
-    print('Beginning cross-validation phase')
-    number_of_annotations = len(model.annotations)
-    for iteration in range(number_of_annotations - 1):
-        model.remove_worst_annotation(header)
-        if model.xvl <= model.xvl_cache:
-            model.revert()
-            break
-    print('Exporting post-cross-validation results')
-    model.export('post-xv')
-    print('Workflow complete.')
+        if not args.resume:
+            individual_results.identify_best_starting_state()
+            model.set_state(individual_results.best_starting_state)
+        print(
+            'Constructing joint model, beginning with: {} (llk: {})'
+            .format(', '.join(model.annotations), model.llk)
+        )
+        while (
+            (
+                individual_results
+                .defined_ci_annotations
+                .union(set(args.base_model.split('+')))
+            )
+            > set(model.annotations)
+        ):
+            model.append_best_annotation(individual_results)
+            if model.llk <= model.llk_cache + args.threshold:
+                model.revert()
+                break
+        print('Exporting pre-cross-validation results')
+        model.export('pre-xv')
+        model.calibrate_cross_validation_penalty(header, processes=args.processes)
+        print('Beginning cross-validation phase')
+        number_of_annotations = len(model.annotations)
+        for iteration in range(number_of_annotations - 1):
+            model.remove_worst_annotation(header)
+            if model.xvl <= model.xvl_cache:
+                model.revert()
+                break
+        print('Exporting post-cross-validation results')
+        model.export('post-xv')
+        print('Workflow complete.')
 
 
 def parse_arguments():
@@ -1150,6 +1151,11 @@ def parse_arguments():
     )
     alternate_workflow_group = parser.add_argument_group(
         'alternate workflow arguments'
+    )
+    alternate_workflow_group.add_argument(
+        '--individual-results-only',
+        action='store_true',
+        help='Compute results only for individual annotations'
     )
     alternate_workflow_group.add_argument(
         '--consistent-estimates-only',
