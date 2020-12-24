@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='pyfgwas',
-    version='0.0.2',
+    version='0.0.3',
     author='Anthony Aylward',
     author_email='aaylward@eng.ucsd.edu',
     description='Wrapper for fGWAS',
