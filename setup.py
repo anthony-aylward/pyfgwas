@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='pyfgwas',
-    version='0.0.1',
+    version='0.0.2',
     author='Anthony Aylward',
     author_email='aaylward@eng.ucsd.edu',
     description='Wrapper for fGWAS',
@@ -20,7 +20,7 @@ setuptools.setup(
     ],
     install_requires=[],
     entry_points={
-        'console_scripts': ['pyfgaws=pyfgwas.pyfgwas:main',]
+        'console_scripts': ['pyfgwas=pyfgwas.pyfgwas:main',]
     },
     include_package_data=True
 )
